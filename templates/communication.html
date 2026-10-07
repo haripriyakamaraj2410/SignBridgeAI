@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Two-Way Communication — SignBridge AI{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1>🔄 Two-Way Communication</h1>
+    <p>Student sends a quick phrase to the teacher. Teacher can also send a sentence back as ISL signs.</p>
+  </div>
+
+  <div class="category-tabs">
+    <button class="pill active" id="studentTab" onclick="showPanel('student')">I'm a Student</button>
+    <button class="pill" id="teacherTab" onclick="showPanel('teacher')">I'm a Teacher</button>
+  </div>
+
+  <div class="panel" id="studentPanel">
+    <h3 style="margin-top:0;">Quick phrases</h3>
+    <div class="grid" id="phraseGrid"></div>
+    <div style="margin-top:24px;">
+      <h3>Ask your own question</h3>
+      <textarea id="studentText" rows="3" placeholder="Type a question or doubt for your teacher..."></textarea>
+      <div style="margin-top:14px;">
+        <button class="primary" type="button" onclick="sendStudentMessage()">Send question</button>
+      </div>
+      <div class="sign-sequence" id="studentSignOutput" style="margin-top:20px;"></div>
+    </div>
+    <div id="sentLog" style="color:var(--muted); margin-top:18px;">Nothing sent yet.</div>
+  </div>
+
+  <div class="panel" id="teacherPanel" style="display:none;">
+    <h3 style="margin-top:0;">Reply to student (text or speech)</h3>
+    <textarea id="teacherText" rows="2" placeholder="e.g. Please wait, I will explain again."></textarea>
+    <div style="margin-top:14px; display:flex; gap:12px; flex-wrap:wrap;">
+      <button class="primary" onclick="sendTeacherReply()">Send as Signs</button>
+      <button id="teacherMic" class="mic-btn" style="width:56px;height:56px;font-size:1.3rem;">🎤</button>
+    </div>
+    <div class="sign-sequence" id="teacherSignOutput" style="margin-top:20px;"></div>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0;">Live conversation log</h3>
+    <div id="msgList" class="conversation-log"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const commonPhrases = ["help", "understand", "repeat", "question", "yes", "no", "more", "sorry"];
+  const phraseLabels = {
+    help: "I need help",
+    understand: "I don't understand",
+    repeat: "Please repeat",
+    question: "I have a question",
+    yes: "Yes",
+    no: "No",
+    more: "I need more time",
+    sorry: "Sorry",
+  };
+
+  function showPanel(who) {
+    document.getElementById('studentPanel').style.display = who === 'student' ? 'block' : 'none';
+    document.getElementById('teacherPanel').style.display = who === 'teacher' ? 'block' : 'none';
+    document.getElementById('studentTab').classList.toggle('active', who === 'student');
+    document.getElementById('teacherTab').classList.toggle('active', who === 'teacher');
+  }
+
+  const grid = document.getElementById('phraseGrid');
+  commonPhrases.forEach(word => {
+    const card = document.createElement('div');
+    card.className = 'phrase-btn';
+    card.style.cursor = 'pointer';
+    card.textContent = phraseLabels[word] || word;
+    card.onclick = () => sendPhrase(word, phraseLabels[word] || word);
+    grid.appendChild(card);
+  });
+
+  async function sendPhrase(word, label) {
+    await SignBridge.post('/api/message', { sender: 'student', phrase: label });
+    document.getElementById('sentLog').textContent = `✅ Sent "${label}" to teacher.`;
+    refreshLog();
+  }
+
+  async function sendStudentMessage() {
+    const input = document.getElementById('studentText');
+    const text = input.value.trim();
+    if (!text) return;
+    await SignBridge.post('/api/message', { sender: 'student', phrase: text });
+    const data = await SignBridge.post('/api/convert-signs', { text, use_concepts: true });
+    SignBridge.renderSignSequence(data.sequence, document.getElementById('studentSignOutput'));
+    document.getElementById('sentLog').textContent = `✅ Sent "${text}" to teacher.`;
+    input.value = '';
+    refreshLog();
+  }
+
+  async function sendTeacherReply() {
+    const text = document.getElementById('teacherText').value.trim();
+    if (!text) return;
+    await SignBridge.post('/api/message', { sender: 'teacher', phrase: text });
+    const data = await SignBridge.post('/api/convert-signs', { text, use_concepts: true });
+    SignBridge.renderSignSequence(data.sequence, document.getElementById('teacherSignOutput'));
+    refreshLog();
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    const rec = new SpeechRecognition();
+    rec.onresult = (e) => { document.getElementById('teacherText').value = e.results[0][0].transcript; sendTeacherReply(); };
+    document.getElementById('teacherMic').onclick = () => rec.start();
+  } else {
+    document.getElementById('teacherMic').disabled = true;
+  }
+
+  async function refreshLog() {
+    const data = await SignBridge.get('/api/messages');
+    const list = document.getElementById('msgList');
+    if (!data.length) { list.innerHTML = '<p style="color:var(--muted)">No messages yet.</p>'; return; }
+    list.innerHTML = data.map(m => `
+      <div class="msg-row ${m.sender}">
+        <div class="message-avatar">${m.sender === 'student' ? 'S' : 'T'}</div>
+        <div class="message-bubble">
+          <div class="message-author">${m.sender === 'student' ? 'You' : 'Teacher'}</div>
+          <div class="message-text">${m.phrase}</div>
+          <div class="message-time">${m.created_at}</div>
+        </div>
+      </div>`).join('');
+  }
+
+  refreshLog();
+  setInterval(refreshLog, 3000);
+</script>
+{% endblock %}

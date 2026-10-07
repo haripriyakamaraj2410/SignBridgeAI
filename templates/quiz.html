@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Quiz — SignBridge AI{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1>🧩 Quiz</h1>
+    <p>Choose a category and quiz type, then test yourself. Your results feed your Dashboard.</p>
+  </div>
+
+  <div class="panel">
+    <h3 style="margin-top:0;">Category</h3>
+    <div class="category-tabs" id="categoryTabs"></div>
+
+    <h3>Quiz type</h3>
+    <div class="category-tabs" id="typeTabs">
+      <button class="pill active" data-type="sign_to_word">Sign → Word</button>
+      <button class="pill" data-type="word_to_sign">Word → Sign</button>
+      <button class="pill" data-type="multiple_choice">Multiple Choice</button>
+      <button class="pill" data-type="arrange_signs">Arrange Signs</button>
+    </div>
+
+    <button class="primary" onclick="startQuiz()">Start Quiz</button>
+  </div>
+
+  <div class="panel" id="quizPanel" style="display:none;">
+    <p id="quizProgress" style="color:var(--muted); font-weight:700;"></p>
+    <div id="quizStage"></div>
+    <p id="quizScore" style="margin-top:18px; color:var(--muted); font-weight:700;"></p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const signsByCategory = {{ signs_by_category | tojson }};
+  const categories = {{ categories | tojson }};
+  function slugify(w) { return w.trim().toLowerCase().replace(/ /g, '-'); }
+  function imgFor(w) { return `/static/signs/images/${slugify(w)}.svg`; }
+  function shuffle(a) { return a.slice().sort(() => Math.random() - 0.5); }
+
+  let selectedCategory = categories[0];
+  let selectedType = 'sign_to_word';
+
+  const catTabs = document.getElementById('categoryTabs');
+  categories.forEach((cat, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'pill' + (i === 0 ? ' active' : '');
+    btn.textContent = cat;
+    btn.onclick = () => { document.querySelectorAll('#categoryTabs .pill').forEach(b => b.classList.remove('active')); btn.classList.add('active'); selectedCategory = cat; };
+    catTabs.appendChild(btn);
+  });
+
+  document.querySelectorAll('#typeTabs .pill').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('#typeTabs .pill').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedType = btn.dataset.type;
+    };
+  });
+
+  let queue = [], qIndex = 0, score = 0;
+
+  function startQuiz() {
+    const words = Object.keys(signsByCategory[selectedCategory]);
+    if (words.length < 4) { alert('Not enough signs in this category yet.'); return; }
+    queue = shuffle(words).slice(0, Math.min(6, words.length));
+    qIndex = 0; score = 0;
+    document.getElementById('quizPanel').style.display = 'block';
+    renderQuestion();
+  }
+
+  function updateProgress() {
+    document.getElementById('quizProgress').textContent = `Question ${qIndex + 1} of ${queue.length} — ${selectedCategory} — ${selectedType.replace(/_/g,' ')}`;
+  }
+
+  function finishIfDone() {
+    if (qIndex >= queue.length) {
+      document.getElementById('quizStage').innerHTML = '<p style="font-size:1.3rem; font-weight:700;">Quiz complete! 🎉</p>';
+      document.getElementById('quizProgress').textContent = '';
+      document.getElementById('quizScore').textContent = `Final score: ${score} / ${queue.length}`;
+      return true;
+    }
+    return false;
+  }
+
+  async function submitResult(word, isCorrect) {
+    await SignBridge.post('/api/quiz-result', {
+      student: SignBridge.getStudentName(),
+      category: selectedCategory,
+      quiz_type: selectedType,
+      sign_word: word,
+      is_correct: isCorrect,
+    });
+  }
+
+  function renderQuestion() {
+    if (finishIfDone()) return;
+    updateProgress();
+    const word = queue[qIndex];
+    const meta = signsByCategory[selectedCategory][word];
+    const stage = document.getElementById('quizStage');
+    const allWords = Object.keys(signsByCategory[selectedCategory]);
+
+    if (selectedType === 'sign_to_word') {
+      const options = shuffle([word, ...shuffle(allWords.filter(w => w !== word)).slice(0, 3)]);
+      stage.innerHTML = `
+        <img src="${imgFor(word)}" alt="sign" style="width:180px; display:block; margin:0 auto 20px; border-radius:14px;">
+        <div id="optionsWrap"></div>`;
+      const wrap = document.getElementById('optionsWrap');
+      options.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'quiz-option';
+        b.textContent = opt;
+        b.onclick = () => answerPicked(b, opt === word, word, wrap);
+        wrap.appendChild(b);
+      });
+
+    } else if (selectedType === 'word_to_sign') {
+      const options = shuffle([word, ...shuffle(allWords.filter(w => w !== word)).slice(0, 3)]);
+      stage.innerHTML = `<p style="font-size:1.3rem; font-weight:700; text-transform:capitalize;">What is the sign for "${word}"?</p>
+        <div class="sign-sequence" id="optionsWrap"></div>`;
+      const wrap = document.getElementById('optionsWrap');
+      options.forEach(opt => {
+        const card = document.createElement('div');
+        card.className = 'sign-card';
+        card.style.cursor = 'pointer';
+        card.innerHTML = `<img src="${imgFor(opt)}" alt="${opt}"><div class="word">?</div>`;
+        card.onclick = () => answerPicked(card, opt === word, word, wrap, true);
+        wrap.appendChild(card);
+      });
+
+    } else if (selectedType === 'multiple_choice') {
+      const example = meta.example.replace(new RegExp(word, 'i'), '_____');
+      const options = shuffle([word, ...shuffle(allWords.filter(w => w !== word)).slice(0, 3)]);
+      stage.innerHTML = `<p style="font-size:1.15rem;">Fill in the blank: <em>"${example}"</em></p><div id="optionsWrap"></div>`;
+      const wrap = document.getElementById('optionsWrap');
+      options.forEach(opt => {
+        const b = document.createElement('button');
+        b.className = 'quiz-option';
+        b.textContent = opt;
+        b.onclick = () => answerPicked(b, opt === word, word, wrap);
+        wrap.appendChild(b);
+      });
+
+    } else if (selectedType === 'arrange_signs') {
+      // Build a mini phrase from 3 random words in this category (including target word)
+      const phraseWords = shuffle([word, ...shuffle(allWords.filter(w => w !== word)).slice(0, 2)]);
+      const correctOrder = phraseWords.slice();
+      const shuffled = shuffle(phraseWords);
+      let chosen = [];
+      stage.innerHTML = `
+        <p style="font-weight:700;">Tap the signs in this order: <span style="color:var(--primary-dark)">${correctOrder.join(' → ')}</span></p>
+        <div class="sign-sequence" id="optionsWrap"></div>
+        <div style="margin-top:16px;"><strong>Your order:</strong> <span id="chosenOrder" style="color:var(--muted)">(tap signs above)</span></div>
+        <button class="secondary" style="margin-top:14px;" onclick="renderQuestion()">Reset</button>
+      `;
+      const wrap = document.getElementById('optionsWrap');
+      shuffled.forEach(w => {
+        const card = document.createElement('div');
+        card.className = 'sign-card';
+        card.style.cursor = 'pointer';
+        card.innerHTML = `<img src="${imgFor(w)}" alt="${w}"><div class="word">${w}</div>`;
+        card.onclick = () => {
+          if (card.dataset.used) return;
+          card.dataset.used = '1';
+          card.style.opacity = '0.35';
+          chosen.push(w);
+          document.getElementById('chosenOrder').textContent = chosen.join(' → ');
+          if (chosen.length === correctOrder.length) {
+            const isCorrect = JSON.stringify(chosen) === JSON.stringify(correctOrder);
+            submitResult(word, isCorrect);
+            score += isCorrect ? 1 : 0;
+            const feedback = document.createElement('p');
+            feedback.style.marginTop = '14px';
+            feedback.style.fontWeight = '700';
+            feedback.style.color = isCorrect ? 'var(--accent)' : 'var(--danger)';
+            feedback.textContent = isCorrect ? 'Correct order! ✅' : `Not quite — correct order was ${correctOrder.join(' → ')}`;
+            stage.appendChild(feedback);
+            document.getElementById('quizScore').textContent = `Score so far: ${score} / ${qIndex + 1}`;
+            qIndex++;
+            setTimeout(renderQuestion, 1400);
+          }
+        };
+        wrap.appendChild(card);
+      });
+    }
+  }
+
+  function answerPicked(el, isCorrect, word, wrap, isImageMode) {
+    [...wrap.children].forEach(c => c.style.pointerEvents = 'none');
+    if (isCorrect) {
+      el.classList.add(isImageMode ? '' : 'correct');
+      if (isImageMode) el.style.border = '3px solid var(--accent)';
+    } else {
+      el.classList.add(isImageMode ? '' : 'wrong');
+      if (isImageMode) el.style.border = '3px solid var(--danger)';
+    }
+    submitResult(word, isCorrect);
+    score += isCorrect ? 1 : 0;
+    document.getElementById('quizScore').textContent = `Score so far: ${score} / ${qIndex + 1}`;
+    qIndex++;
+    setTimeout(renderQuestion, 1100);
+  }
+</script>
+{% endblock %}

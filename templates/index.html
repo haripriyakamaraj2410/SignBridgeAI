@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}SignBridge AI — Communication without barriers{% endblock %}
+{% block content %}
+<div class="hero">
+  <span class="tagline">Communication without barriers.</span>
+  <h1>Bridging classrooms with <span class="accent">English, Gujarati & ISL</span></h1>
+  <p>An AI-powered platform that helps deaf and hard-of-hearing students in Gujarat follow lessons, ask questions, and learn Indian Sign Language — in the language they already speak.</p>
+</div>
+
+<div class="container">
+  <div class="blackboard">
+    <div class="blackboard-heading">
+      <span>✦</span>
+      <h2>Choose your classroom station</h2>
+      <span>✦</span>
+    </div>
+    <div class="grid">
+      <a class="card" href="/classroom">
+        <span class="icon">🎓</span>
+        <h3>Live Classroom</h3>
+        <p>Teacher speaks English or Gujarati → AI simplifies it → ISL sign sequence appears live.</p>
+      </a>
+      <a class="card" href="/sign-converter">
+        <span class="icon">🤟</span>
+        <h3>Sign Converter</h3>
+        <p>Type any sentence and instantly see it as a sequence of ISL signs.</p>
+      </a>
+      <a class="card" href="/simplifier">
+        <span class="icon">🧠</span>
+        <h3>AI Simplifier</h3>
+        <p>Turn dense textbook language into short, student-friendly sentences.</p>
+      </a>
+      <a class="card" href="/learn">
+        <span class="icon">📚</span>
+        <h3>Learn & Quiz</h3>
+        <p>Six categories of signs — classroom, food, travel, science, emergency, daily life.</p>
+      </a>
+      <a class="card" href="/communication">
+        <span class="icon">🔄</span>
+        <h3>Two-Way Communication</h3>
+        <p>Students signal "I need help" instantly; teachers reply in signs back.</p>
+      </a>
+      <a class="card" href="/dashboard">
+        <span class="icon">📊</span>
+        <h3>Student Dashboard</h3>
+        <p>Track streaks, accuracy, weak signs, and get personalised practice.</p>
+      </a>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:48px; text-align:center;">
+    <h3 style="margin-bottom:6px;">The problem we're solving</h3>
+    <p style="color:var(--muted); max-width:700px; margin:0 auto;">
+      Deaf and hard-of-hearing students in Gujarat face a real communication gap — existing accessibility
+      tools rarely support Gujarati alongside English and Indian Sign Language. SignBridge AI connects
+      teachers and students through all three, in one place.
+    </p>
+  </div>
+</div>
+{% endblock %}

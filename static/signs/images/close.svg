@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 260" width="280" height="260">
+  <defs>
+    <linearGradient id="bg-close" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#5B21B6" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#5B21B6" stop-opacity="0.22"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="272" height="252" rx="22" fill="url(#bg-close)" stroke="#5B21B6" stroke-width="2.5"/>
+  <g transform="translate(40,10) scale(0.65)" fill="none" stroke="#5B21B6" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="
+M84,154 C84,143 93,135 104,135 L104,84 C104,76 110,70 118,70
+C126,70 132,76 132,84 L132,135 L132,58 C132,50 138,44 146,44
+C154,44 160,50 160,58 L160,135 L160,92 C160,84 166,78 174,78
+C182,78 188,84 188,92 L188,140 L188,111 C188,103 194,97 202,97
+C210,97 216,103 216,111 L216,160 C216,197 190,220 155,220 L122,220
+C99,220 84,193 84,154
+"/>
+  </g>
+  <text x="140" y="205" text-anchor="middle" font-family="Segoe UI, sans-serif" font-weight="700" font-size="20" fill="#2b2350">CLOSE</text>
+  <text x="140" y="230" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="15" fill="#6b6489">બંધ કરો</text>
+  <text x="140" y="248" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="9" fill="#a39ac2">ISL placeholder — replace with verified asset</text>
+</svg>

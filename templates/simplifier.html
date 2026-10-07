@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}AI Simplifier — SignBridge AI{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1>🧠 AI Simplifier</h1>
+    <p>Paste a difficult classroom explanation and get a short, student-friendly version.</p>
+  </div>
+
+  <div class="panel">
+    <textarea id="inputText" rows="4" placeholder="e.g. Photosynthesis is the process by which plants utilize sunlight, water, and carbon dioxide to synthesize glucose and oxygen."></textarea>
+    <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap;">
+      <button class="primary" onclick="simplify()">Simplify</button>
+      <button class="secondary" id="convertBtn" style="display:none;" onclick="convertSimplified()">Also convert to signs</button>
+    </div>
+  </div>
+
+  <div class="panel" id="resultPanel" style="display:none;">
+    <h3>Simplified explanation</h3>
+    <div class="original-box" id="originalText"></div>
+    <div class="simplified-box" id="simplifiedText"></div>
+  </div>
+
+  <div class="panel" id="signPanel" style="display:none;">
+    <h3>🤟 ISL Sign Sequence</h3>
+    <div class="sign-sequence" id="signSequence"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let lastSimplified = '';
+
+  async function simplify() {
+    const text = document.getElementById('inputText').value.trim();
+    if (!text) return;
+    const data = await SignBridge.post('/api/simplify', { text });
+    lastSimplified = data.simplified;
+
+    document.getElementById('resultPanel').style.display = 'block';
+    document.getElementById('originalText').textContent = 'Original: ' + data.original;
+    document.getElementById('simplifiedText').textContent = data.simplified;
+    document.getElementById('convertBtn').style.display = 'inline-block';
+    document.getElementById('signPanel').style.display = 'none';
+  }
+
+  async function convertSimplified() {
+    const data = await SignBridge.post('/api/convert-signs', { text: lastSimplified, use_concepts: true });
+    document.getElementById('signPanel').style.display = 'block';
+    SignBridge.renderSignSequence(data.sequence, document.getElementById('signSequence'));
+  }
+</script>
+{% endblock %}

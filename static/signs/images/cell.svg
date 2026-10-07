@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 260" width="280" height="260">
+  <defs>
+    <linearGradient id="bg-cell" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6C5CE7" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#6C5CE7" stop-opacity="0.22"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="272" height="252" rx="22" fill="url(#bg-cell)" stroke="#6C5CE7" stroke-width="2.5"/>
+  <g transform="translate(40,10) scale(0.65)" fill="none" stroke="#6C5CE7" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="
+M100,150 C95,150 90,145 90,138 L90,80 C90,74 95,70 100,70 C105,70 110,74 110,80 L110,110
+M110,110 L110,60 C110,54 115,50 121,50 C127,50 132,54 132,60 L132,110
+M132,110 L132,55 C132,49 137,45 143,45 C149,45 154,49 154,55 L154,110
+M154,110 L154,65 C154,59 159,55 165,55 C171,55 176,59 176,65 L176,125
+C176,125 180,120 188,122 C196,124 198,132 198,140 L198,160
+C198,190 180,215 150,215 L120,215 C95,215 78,195 78,170 L78,150
+C78,140 86,132 96,132
+"/>
+  </g>
+  <text x="140" y="205" text-anchor="middle" font-family="Segoe UI, sans-serif" font-weight="700" font-size="20" fill="#2b2350">CELL</text>
+  <text x="140" y="230" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="15" fill="#6b6489">કોષ</text>
+  <text x="140" y="248" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="9" fill="#a39ac2">ISL placeholder — replace with verified asset</text>
+</svg>

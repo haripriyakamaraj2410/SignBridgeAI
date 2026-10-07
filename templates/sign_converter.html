@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sign Converter — SignBridge AI{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1>🤟 Sign Converter</h1>
+    <p>Type any English or Gujarati sentence and see it as a sequence of ISL signs.</p>
+  </div>
+
+  <div class="panel">
+    <textarea id="inputText" rows="3" placeholder="e.g. Please give me some water."></textarea>
+    <div style="margin-top:16px;">
+      <button class="primary" onclick="convertText()">Convert to Sign</button>
+    </div>
+  </div>
+
+  <div class="panel" id="signPanel" style="display:none;">
+    <h3>ISL Sign Sequence</h3>
+    <div class="sign-sequence" id="signSequence"></div>
+    <p style="color:var(--muted); margin-top:16px; font-size:0.9rem;">
+      Words highlighted in orange with letter chips aren't yet in our sign dictionary, so they're finger-spelled letter by letter as a fallback.
+    </p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function convertText() {
+    const text = document.getElementById('inputText').value.trim();
+    if (!text) return;
+    const data = await SignBridge.post('/api/convert-signs', { text });
+    document.getElementById('signPanel').style.display = 'block';
+    SignBridge.renderSignSequence(data.sequence, document.getElementById('signSequence'));
+  }
+</script>
+{% endblock %}

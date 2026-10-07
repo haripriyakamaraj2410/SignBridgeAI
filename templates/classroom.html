@@ -1,0 +1,310 @@
+{% extends "base.html" %}
+{% block title %}Live Classroom — SignBridge AI{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1>🎓 Live Classroom</h1>
+    <p>Teacher speaks or types → AI simplifies the sentence → key concepts appear as ISL signs.</p>
+  </div>
+
+  <div class="panel" style="text-align:center;">
+    <button id="micBtn" class="mic-btn">🎤</button>
+    <p id="micStatus" style="color:var(--muted); margin-top:14px;">Tap to speak (English or Gujarati)</p>
+
+    <div style="margin-top:22px;">
+      <textarea id="inputText" rows="3" placeholder="e.g. Tomorrow we will learn photosynthesis."></textarea>
+    </div>
+    <div style="margin-top:16px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <button class="primary" onclick="processClassroomText()">Convert to Sign</button>
+      <select id="langSelect">
+        <option value="en-US">English</option>
+        <option value="gu-IN">Gujarati</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel camera-panel">
+    <div class="camera-heading">
+      <div>
+        <h3>Student response camera</h3>
+        <p class="camera-help">Nod for yes, shake for no, thumbs-up for correct, or cross both hands for wrong.</p>
+      </div>
+      <span id="cameraStatus" class="camera-status">Camera off</span>
+    </div>
+    <div class="camera-layout">
+      <div class="camera-frame">
+        <video id="cameraVideo" autoplay muted playsinline></video>
+        <div id="cameraMessage" class="camera-message">Camera preview will appear here.</div>
+      </div>
+      <div class="camera-output">
+        <label for="detectedWords">Student response words</label>
+        <textarea id="detectedWords" rows="5" readonly placeholder="Detected responses will appear here."></textarea>
+        <div class="camera-actions">
+          <button id="startCamera" class="primary" type="button">Start camera</button>
+          <button id="stopCamera" class="secondary" type="button" disabled>Stop</button>
+          <button id="clearDetected" class="secondary" type="button">Clear</button>
+        </div>
+        <p class="camera-help">Each detected response is spoken aloud automatically.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="simplifyPanel" style="display:none;">
+    <h3>🧠 AI Simplification</h3>
+    <div class="original-box" id="originalText"></div>
+    <div class="simplified-box" id="simplifiedText"></div>
+  </div>
+
+  <div class="panel" id="signPanel" style="display:none;">
+    <div class="presentation-toolbar">
+      <h3>🤟 Classroom Sign Output</h3>
+      <label for="presentationMode">View</label>
+      <select id="presentationMode">
+        <option value="cards">Sign cards</option>
+        <option value="avatar">Animated avatar</option>
+      </select>
+      <label for="avatarSpeed">Speed</label>
+      <select id="avatarSpeed">
+        <option value="1">Normal</option>
+        <option value="1.8">Slow</option>
+        <option value="0.65">Fast</option>
+      </select>
+      <button id="repeatAvatar" class="secondary" type="button">Repeat signs</button>
+    </div>
+    <div class="sign-sequence" id="signSequence"></div>
+    <div class="classroom-stage" id="classroomStage" aria-live="polite"></div>
+  </div>
+
+  <div class="panel" style="background:#F6F5FC;">
+    <h3 style="margin-top:0;">Try the example</h3>
+    <p style="color:var(--muted);">"Tomorrow we will learn photosynthesis." simplifies to "Tomorrow we will learn how plants make food using sunlight." and signs as: <strong>Tomorrow → Learn → Plants → Food → Sunlight</strong></p>
+    <button class="secondary" onclick="loadExample()">Load example sentence</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+<script>
+  const micBtn = document.getElementById('micBtn');
+  const micStatus = document.getElementById('micStatus');
+  const inputText = document.getElementById('inputText');
+  const langSelect = document.getElementById('langSelect');
+  const presentationMode = document.getElementById('presentationMode');
+  const avatarSpeed = document.getElementById('avatarSpeed');
+  const repeatAvatar = document.getElementById('repeatAvatar');
+  const classroomStage = document.getElementById('classroomStage');
+  let classroomSequence = [];
+  let cameraStream;
+  let handCamera;
+  let faceMesh;
+  let lastResponse = '';
+  let lastResponseAt = 0;
+  let headSamples = [];
+  let lastHeadResponseAt = 0;
+
+  const video = document.getElementById('cameraVideo');
+  const cameraMessage = document.getElementById('cameraMessage');
+  const cameraStatus = document.getElementById('cameraStatus');
+  const detectedWords = document.getElementById('detectedWords');
+  const startCameraButton = document.getElementById('startCamera');
+  const stopCameraButton = document.getElementById('stopCamera');
+
+  function landmarkDistance(first, second) {
+    return Math.hypot(first.x - second.x, first.y - second.y);
+  }
+
+  function speakResponse(word) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(new SpeechSynthesisUtterance(word));
+  }
+
+  function appendResponse(word, cooldown = 1600) {
+    if (!word) return;
+    const now = Date.now();
+    if (word === lastResponse && now - lastResponseAt < cooldown) return;
+    detectedWords.value = `${detectedWords.value} ${word}`.trim();
+    lastResponse = word;
+    lastResponseAt = now;
+    speakResponse(word);
+  }
+
+  function classifyStudentHands(allHands) {
+    if (allHands.length >= 2) {
+      const firstWrist = allHands[0][0];
+      const secondWrist = allHands[1][0];
+      if (landmarkDistance(firstWrist, secondWrist) < 0.34 && Math.abs(firstWrist.y - secondWrist.y) < 0.24) return 'wrong';
+    }
+    const landmarks = allHands[0];
+    if (!landmarks) return '';
+    const fingerPairs = [[8, 6], [12, 10], [16, 14], [20, 18]];
+    const extended = fingerPairs.map(([tip, pip]) => landmarks[tip].y < landmarks[pip].y);
+    const thumbUp = landmarks[4].y < landmarks[3].y - 0.04 && extended.filter(Boolean).length === 0;
+    return thumbUp ? 'correct' : '';
+  }
+
+  function classifyStudentHead(faceLandmarks) {
+    const nose = faceLandmarks[1];
+    const now = Date.now();
+    headSamples.push({ x: nose.x, y: nose.y, at: now });
+    headSamples = headSamples.filter(sample => now - sample.at < 1200);
+    if (headSamples.length < 8 || now - lastHeadResponseAt < 1800) return '';
+    const first = headSamples[0];
+    const latest = headSamples[headSamples.length - 1];
+    const xRange = Math.max(...headSamples.map(sample => sample.x)) - Math.min(...headSamples.map(sample => sample.x));
+    const yRange = Math.max(...headSamples.map(sample => sample.y)) - Math.min(...headSamples.map(sample => sample.y));
+    const xDirections = headSamples.slice(1).map((sample, index) => Math.sign(sample.x - headSamples[index].x)).filter(Boolean);
+    const yDirections = headSamples.slice(1).map((sample, index) => Math.sign(sample.y - headSamples[index].y)).filter(Boolean);
+    const xChanges = xDirections.slice(1).filter((direction, index) => direction !== xDirections[index]).length;
+    const yChanges = yDirections.slice(1).filter((direction, index) => direction !== yDirections[index]).length;
+    if (yRange > 0.045 && yChanges >= 2 && Math.abs(latest.y - first.y) < 0.04) {
+      lastHeadResponseAt = now;
+      headSamples = [];
+      return 'yes';
+    }
+    if (xRange > 0.06 && xChanges >= 2 && Math.abs(latest.x - first.x) < 0.05) {
+      lastHeadResponseAt = now;
+      headSamples = [];
+      return 'no';
+    }
+    return '';
+  }
+
+  function handleStudentHands(results) {
+    const allHands = results.multiHandLandmarks || [];
+    cameraMessage.textContent = allHands.length ? 'Hand detected. Hold your response steady.' : 'Show your hand or cross both hands.';
+    appendResponse(classifyStudentHands(allHands));
+  }
+
+  function handleStudentFace(results) {
+    const faceLandmarks = results.multiFaceLandmarks && results.multiFaceLandmarks[0];
+    if (faceLandmarks) appendResponse(classifyStudentHead(faceLandmarks), 1800);
+    else headSamples = [];
+  }
+
+  async function startStudentCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      cameraMessage.textContent = 'Camera access requires HTTPS or localhost.';
+      return;
+    }
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      video.srcObject = cameraStream;
+      const hands = new Hands({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+      hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.6 });
+      hands.onResults(handleStudentHands);
+      faceMesh = new FaceMesh({ locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
+      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.7, minTrackingConfidence: 0.6 });
+      faceMesh.onResults(handleStudentFace);
+      handCamera = new Camera(video, { onFrame: async () => { await hands.send({ image: video }); await faceMesh.send({ image: video }); }, width: 640, height: 480 });
+      handCamera.start();
+      cameraStatus.textContent = 'Camera on';
+      cameraStatus.classList.add('on');
+      cameraMessage.textContent = 'Looking for a student response...';
+      startCameraButton.disabled = true;
+      stopCameraButton.disabled = false;
+    } catch (error) {
+      cameraMessage.textContent = error.message || 'Camera or recognition model could not start.';
+      cameraStatus.textContent = 'Camera error';
+    }
+  }
+
+  function stopStudentCamera() {
+    if (handCamera) handCamera.stop();
+    if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+    video.srcObject = null;
+    faceMesh = null;
+    headSamples = [];
+    cameraStatus.textContent = 'Camera off';
+    cameraStatus.classList.remove('on');
+    cameraMessage.textContent = 'Camera preview will appear here.';
+    startCameraButton.disabled = false;
+    stopCameraButton.disabled = true;
+  }
+
+  startCameraButton.addEventListener('click', startStudentCamera);
+  stopCameraButton.addEventListener('click', stopStudentCamera);
+  document.getElementById('clearDetected').addEventListener('click', () => { detectedWords.value = ''; lastResponse = ''; headSamples = []; });
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => { micBtn.classList.add('listening'); micStatus.textContent = 'Listening...'; };
+    recognition.onend = () => { micBtn.classList.remove('listening'); micStatus.textContent = 'Tap to speak (English or Gujarati)'; };
+    recognition.onerror = () => { micBtn.classList.remove('listening'); micStatus.textContent = 'Could not hear that. Try again or type instead.'; };
+    recognition.onresult = (event) => {
+      inputText.value = event.results[0][0].transcript;
+      processClassroomText();
+    };
+
+    micBtn.addEventListener('click', () => { recognition.lang = langSelect.value; recognition.start(); });
+  } else {
+    micStatus.textContent = 'Speech recognition not supported here — use Chrome, or type below.';
+    micBtn.disabled = true;
+  }
+
+  function loadExample() {
+    inputText.value = 'Tomorrow we will learn photosynthesis.';
+    processClassroomText();
+  }
+
+  async function processClassroomText() {
+    const text = inputText.value.trim();
+    if (!text) return;
+
+    const simplifyData = await SignBridge.post('/api/simplify', { text });
+
+    document.getElementById('simplifyPanel').style.display = 'block';
+    document.getElementById('originalText').textContent = 'Teacher said: ' + simplifyData.original;
+    document.getElementById('simplifiedText').textContent = simplifyData.simplified;
+
+    // Live Classroom uses concept extraction: filler words dropped, only key ideas signed
+    const convertData = await SignBridge.post('/api/convert-signs', {
+      text: simplifyData.simplified,
+      use_concepts: true,
+    });
+
+    document.getElementById('signPanel').style.display = 'block';
+    classroomSequence = convertData.sequence;
+    renderClassroomView();
+    document.getElementById('classroomStage').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderClassroomView() {
+    const cards = document.getElementById('signSequence');
+    const showingAvatar = presentationMode.value === 'avatar';
+    cards.style.display = showingAvatar ? 'none' : 'flex';
+    classroomStage.innerHTML = '';
+    if (!showingAvatar) {
+      SignBridge.renderSignSequence(classroomSequence, cards);
+      return;
+    }
+    classroomSequence.forEach((item, index) => {
+      const word = item.word;
+      const card = document.createElement('article');
+      const pose = ['wave', 'point', 'book', 'help', 'celebrate'][index % 5];
+      card.className = `presentation-card avatar ${pose} fade-in`;
+      card.style.animationDelay = `${index * 90}ms`;
+      card.style.setProperty('--avatar-speed', `${avatarSpeed.value}s`);
+      card.innerHTML = `<div class="avatar-figure" aria-hidden="true"><span class="avatar-head"></span><span class="avatar-body"></span><span class="avatar-hand avatar-hand-left"></span><span class="avatar-hand avatar-hand-right"></span></div><h4>${word}</h4><div class="bridge-meaning">${item.gu || 'Gujarati meaning unavailable'}</div><p>ISL animated sign</p>`;
+      classroomStage.appendChild(card);
+    });
+  }
+
+  presentationMode.addEventListener('change', renderClassroomView);
+  avatarSpeed.addEventListener('change', renderClassroomView);
+  repeatAvatar.addEventListener('click', () => {
+    if (presentationMode.value !== 'avatar') presentationMode.value = 'avatar';
+    renderClassroomView();
+    classroomStage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+</script>
+{% endblock %}

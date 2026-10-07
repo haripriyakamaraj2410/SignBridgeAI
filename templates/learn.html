@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Learn — SignBridge AI{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1>📚 Learn Signs</h1>
+    <p>Browse signs by category. Each card shows the sign, its meaning, and an example sentence.</p>
+  </div>
+
+  <div class="category-tabs" id="categoryTabs"></div>
+  <div class="sign-sequence" id="signGrid" style="margin-top:20px;"></div>
+
+  <div class="panel" style="margin-top:30px; text-align:center;">
+    <h3>Ready to test yourself?</h3>
+    <a class="primary" href="/quiz">Go to Quiz →</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const signsByCategory = {{ signs_by_category | tojson }};
+  const categories = {{ categories | tojson }};
+
+  function slugify(w) { return w.trim().toLowerCase().replace(/ /g, '-'); }
+
+  const tabsEl = document.getElementById('categoryTabs');
+  categories.forEach((cat, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'pill' + (i === 0 ? ' active' : '');
+    btn.textContent = cat;
+    btn.onclick = () => selectCategory(cat, btn);
+    tabsEl.appendChild(btn);
+  });
+
+  function selectCategory(cat, btnEl) {
+    document.querySelectorAll('.pill').forEach(b => b.classList.remove('active'));
+    btnEl.classList.add('active');
+    renderCategory(cat);
+  }
+
+  function renderCategory(cat) {
+    const grid = document.getElementById('signGrid');
+    grid.innerHTML = '';
+    const words = signsByCategory[cat];
+    Object.keys(words).forEach(word => {
+      const meta = words[word];
+      const card = document.createElement('div');
+      card.className = 'sign-card fade-in';
+      card.style.width = '190px';
+      card.innerHTML = `
+        <img src="/static/signs/images/${slugify(word)}.svg" alt="ISL sign for ${word}" loading="lazy">
+        <div class="word">${word}</div>
+        <div class="gu">${meta.gu}</div>
+        <div style="font-size:0.82rem; color:var(--muted); margin-top:6px; font-style:italic;">"${meta.example}"</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  if (categories.length) renderCategory(categories[0]);
+</script>
+{% endblock %}
